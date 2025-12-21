@@ -14,4 +14,4 @@ class_name = "GameSession"
 # 3. Migrations: Required for Durable Objects to initialize storage
 [[migrations]]
 tag = "v1"
-new_classes = ["GameSession"]
+new_sqlite_classes = ["GameSession"]
