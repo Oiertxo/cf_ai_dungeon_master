@@ -8,6 +8,7 @@ export class GameSession extends DurableObject<Env> {
 	private history: ChatMessage[] = [];
     // We track stats in state now too
     private stats = { hp: 20, max_hp: 20 };
+    private lastRequestTime: number = 0;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -38,7 +39,14 @@ export class GameSession extends DurableObject<Env> {
 
 		if (request.method === "POST") {
 			try {
-                // ... (Input parsing logic remains the same) ...
+                // Rate Limit check
+                const now = Date.now();
+                if (now - this.lastRequestTime < 1000) {
+                    return new Response("You are moving too fast! Take a breath.", { status: 429 });
+                }
+                this.lastRequestTime = now;
+
+                // Parse user input
 				let userInput = "";
                 const clone = request.clone();
                 try {
