@@ -25,6 +25,7 @@ graph TD
 
     AI -->|"JSON Response"| DO
     DO -->|"HTML/JSON"| Client
+    
 ```
 
 ### 📂 Project Structure
