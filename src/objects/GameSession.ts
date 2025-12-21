@@ -1,88 +1,122 @@
+// src/objects/GameSession.ts
 import { DurableObject } from "cloudflare:workers";
-import { Env, ChatMessage, GameResponse } from "../types";
+import { Env, ChatMessage } from "../types";
+import { logToR2 } from "../utils/logger";
+import { DUNGEON_MASTER_SYSTEM_PROMPT } from "../ai/prompts";
 
 export class GameSession extends DurableObject<Env> {
-	// We keep history in memory for speed, but save to disk for safety
 	private history: ChatMessage[] = [];
+    // We track stats in state now too
+    private stats = { hp: 20, max_hp: 20 };
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
-		// We will load the history inside the blockConcurrencyWhile to ensure data safety
 		this.ctx.blockConcurrencyWhile(async () => {
-			const stored = await this.ctx.storage.get<ChatMessage[]>("history");
-			this.history = stored || [];
+			try {
+				const stored = await this.ctx.storage.get<ChatMessage[]>("history");
+                const storedStats = await this.ctx.storage.get<{hp: number, max_hp: number}>("stats");
+				this.history = stored || [];
+                if (storedStats) this.stats = storedStats;
+			} catch (err) {
+				this.history = [];
+				this.ctx.waitUntil(logToR2(this.env, "ERROR", "Storage Load Failed", { error: err }));
+			}
 		});
 	}
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		// 1. Handle "CLEAR" action (Restart game)
+		// Handle Clear
 		if (url.pathname === "/clear") {
-			this.history = [];
 			await this.ctx.storage.deleteAll();
+			this.history = [];
+            this.stats = { hp: 20, max_hp: 20 }; // Reset stats
+			this.ctx.waitUntil(logToR2(this.env, "INFO", "Game Reset", { sessionId: this.ctx.id.toString() }));
 			return new Response("Game cleared");
 		}
 
-		// 2. Handle Game Input
 		if (request.method === "POST") {
-			const body = await request.json() as { input: string };
-			const userInput = body.input;
-
-			// Add User Input to History
-			this.addMessage("user", userInput);
-
-			// 3. Prepare Prompt for AI
-			// We inject a System Prompt if history is empty
-			if (this.history.length === 1) { // Only user message exists
-				const SYSTEM_PROMPT = `
-You are a Dungeon Master for a text-based RPG. 
-Your tone is mysterious, descriptive, but concise. 
-Do not break character. 
-Describe the environment, check for traps, and manage the player's health.
-Start the adventure now.
-				`;
-				// Insert system prompt at the very beginning
-				this.history.unshift({ role: "system", content: SYSTEM_PROMPT.trim() });
-			}
-
-			// 4. Call Cloudflare Workers AI (Llama 3.3)
 			try {
-				const response = await this.env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-					messages: this.history,
-					max_tokens: 512, // Keep responses snappy
-				});
+                // ... (Input parsing logic remains the same) ...
+				let userInput = "";
+                const clone = request.clone();
+                try {
+                    const body = await request.json() as { input: string };
+                    userInput = body.input;
+                } catch (e) {
+                    try {
+                        const formData = await clone.formData();
+                        userInput = formData.get("input") as string;
+                    } catch (e2) {
+                        userInput = await clone.text();
+                    }
+                }
+				userInput = (userInput || "").trim();
+				if (!userInput) throw new Error("Input cannot be empty");
 
-				// "response" might be a stream or an object depending on binding version.
-				// Usually for 'run', it returns an object with 'response' property.
-				// We cast it safely.
-				const aiText = (response as any).response || "The dungeon falls silent... (AI Error)";
+                this.ctx.waitUntil(logToR2(this.env, "INFO", "User Message", { input: userInput }));
+				this.addMessage("user", userInput);
 
-				this.addMessage("assistant", aiText);
+                // --- 1. SYSTEM PROMPT UPDATE ---
+                // We force the AI to act as a JSON API
+				if (this.history.length === 1) {
+                    this.history.unshift({ role: "system", content: DUNGEON_MASTER_SYSTEM_PROMPT });
+				}
 
-				// 5. Save State (Critical!)
-				await this.ctx.storage.put("history", this.history);
+				// Using Llama 3 8B for speed.
+                const response = await this.env.AI.run("@cf/meta/llama-3-8b-instruct", {
+                    messages: this.history,
+                    max_tokens: 512,
+                });
 
-				// Return the result to the frontend
-				const payload: GameResponse = {
-					response: aiText,
-					history: this.history
-				};
+				const rawAiOutput = (response as any).response; 
+				
+                // --- 2. PARSE AI JSON ---
+                let parsedOutput;
+                try {
+                    // Sometimes AI adds markdown code blocks like ```json ... ```, we clean that
+                    const cleanJson = rawAiOutput.replace(/```json/g, "").replace(/```/g, "").trim();
+                    parsedOutput = JSON.parse(cleanJson);
+                    
+                    // Update internal state
+                    this.stats.hp = parsedOutput.hp;
+                    this.stats.max_hp = parsedOutput.max_hp;
+                } catch (e) {
+                    // Fallback if AI hallucinates and sends plain text
+                    parsedOutput = { 
+                        story: rawAiOutput, 
+                        hp: this.stats.hp, 
+                        max_hp: this.stats.max_hp 
+                    };
+                }
 
-				return new Response(JSON.stringify(payload), {
-					headers: { "Content-Type": "application/json" }
-				});
+                // We save the RAW JSON string to history so the AI remembers its own format context
+				this.addMessage("assistant", JSON.stringify(parsedOutput));
+				
+                await this.ctx.storage.put("history", this.history);
+                await this.ctx.storage.put("stats", this.stats);
 
-			} catch (err) {
-				return new Response(`AI Error: ${err}`, { status: 500 });
+                // Return structured data to Frontend
+				return new Response(JSON.stringify({
+					response: parsedOutput.story, // Just the text for the chat
+                    hp: parsedOutput.hp,          // Number for the bar
+                    max_hp: parsedOutput.max_hp   // Number for the bar
+				}), { headers: { "Content-Type": "application/json" } });
+
+			} catch (err: any) {
+                await logToR2(this.env, "ERROR", "Game Crash", { error: err.message });
+				return new Response(JSON.stringify({ 
+					response: `(System Error: ${err.message})`, 
+                    hp: 0, max_hp: 20
+				}), { headers: { "Content-Type": "application/json" } });
 			}
 		}
 
 		return new Response("Method not allowed", { status: 405 });
 	}
 
-	// Helper to keep history clean
-	private addMessage(role: 'user' | 'assistant', content: string) {
+	private addMessage(role: 'user' | 'assistant' | 'system', content: string) {
 		this.history.push({ role, content });
 	}
 }

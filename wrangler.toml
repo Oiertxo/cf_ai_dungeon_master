@@ -15,3 +15,14 @@ class_name = "GameSession"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GameSession"]
+
+# 4. Rules: For HTML templates
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false
+
+# 5. Cloud logging
+[[r2_buckets]]
+binding = "LOG_BUCKET"
+bucket_name = "dungeon-logs"

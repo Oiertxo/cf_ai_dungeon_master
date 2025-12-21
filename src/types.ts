@@ -2,6 +2,7 @@
 export interface Env {
 	AI: Ai;
 	GAME_SESSION: DurableObjectNamespace;
+    LOG_BUCKET: R2Bucket;
 }
 
 // The structure of a single chat message
