@@ -1,0 +1,20 @@
+{
+  "name": "cf_ai_dungeon_master",
+  "version": "1.0.0",
+  "description": "This is a project for Cloudflare's Summer 2026 internship.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251221.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.56.0"
+  },
+  "dependencies": {
+    "hono": "^4.11.1"
+  }
+}

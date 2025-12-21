@@ -1,0 +1,17 @@
+name = "cf_ai_dungeon_master"
+main = "src/index.ts"
+compatibility_date = "2024-12-20"
+
+# 1. AI Binding: This allows us to access Llama 3.3
+[ai]
+binding = "AI"
+
+# 2. Durable Objects Binding: This connects the code to the storage
+[[durable_objects.bindings]]
+name = "GAME_SESSION"
+class_name = "GameSession"
+
+# 3. Migrations: Required for Durable Objects to initialize storage
+[[migrations]]
+tag = "v1"
+new_classes = ["GameSession"]
