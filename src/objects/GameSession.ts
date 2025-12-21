@@ -44,11 +44,11 @@ export class GameSession extends DurableObject<Env> {
                 try {
                     const body = await request.json() as { input: string };
                     userInput = body.input;
-                } catch (e) {
+                } catch (_e) {
                     try {
                         const formData = await clone.formData();
                         userInput = formData.get("input") as string;
-                    } catch (e2) {
+                    } catch (_e2) {
                         userInput = await clone.text();
                     }
                 }
@@ -82,7 +82,7 @@ export class GameSession extends DurableObject<Env> {
                     // Update internal state
                     this.stats.hp = parsedOutput.hp;
                     this.stats.max_hp = parsedOutput.max_hp;
-                } catch (e) {
+                } catch (_e) {
                     // Fallback if AI hallucinates and sends plain text
                     parsedOutput = { 
                         story: rawAiOutput, 

@@ -14,18 +14,17 @@ This application moves beyond stateless HTTP requests by utilizing **Durable Obj
 
 ```mermaid
 graph TD
-    Client[Browser (HTMX)] -->|POST /api/chat| Worker[Cloudflare Worker (Hono)]
-    Worker -->|Route Request| DO[Durable Object (GameSession)]
-    
-    subgraph "The Brain (Stateful)"
-        DO <-->|Read/Write History| Storage[In-Memory & Disk Storage]
-        DO -->|Inference| AI[Workers AI (Llama 3)]
-        DO -->|Persist Logs| R2[R2 Bucket (dungeon-logs)]
-    end
-    
-    AI -->|JSON Response| DO
-    DO -->|HTML/JSON| Client
+    Client["Browser (HTMX)"] -->|POST /api/chat| Worker["Cloudflare Worker (Hono)"]
+    Worker -->|"Route Request"| DO["Durable Object (GameSession)"]
 
+    subgraph "The Brain (Stateful)"
+        DO <-->|"Read/Write History"| Storage["Storage (In-Memory & Disk)"]
+        DO -->|Inference| AI["Workers AI (Llama 3)"]
+        DO -->|"Persist Logs"| R2["R2 Bucket (dungeon-logs)"]
+    end
+
+    AI -->|"JSON Response"| DO
+    DO -->|"HTML/JSON"| Client
 ```
 
 ### 📂 Project Structure

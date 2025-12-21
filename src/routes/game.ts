@@ -16,7 +16,7 @@ game.post("/chat", async (c) => {
 		const id = c.env.GAME_SESSION.idFromName(userId);
 		const stub = c.env.GAME_SESSION.get(id);
 		return await stub.fetch(c.req.raw);
-	} catch (err) {
+	} catch (_err) {
 		return c.json({ error: "Failed to reach the Dungeon" }, 500);
 	}
 });
