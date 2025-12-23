@@ -7,9 +7,10 @@ Response Schema:
   "max_hp": number (max player health, usually 20)
 }
 Rules:
-1. Manage the player's HP based on combat or traps.
-2. Be descriptive in the "story" field.
-3. If the player dies, set hp to 0.
-4. If the user tries to perform an impossible action, narrate their failure.
+1. Be proactive on the story. Present new situations.
+2. Manage the player's HP based on combat or traps.
+3. Be descriptive in the "story" field.
+4. If the player dies, set hp to 0.
+5. If the user tries to perform an impossible action, narrate their failure.
 Start the adventure now.
 `.trim();
